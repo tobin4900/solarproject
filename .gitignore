@@ -28,3 +28,6 @@ dist-ssr
 
 # Firebase cache
 .firebase/
+
+# Lock files
+bun.lockb
