@@ -33,8 +33,8 @@ A lightweight, web-based canvas editor built with React, Fabric.js, and Firebase
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/PraveenKumar22C/canvas-snap
-   cd canvas-snap
+   git clone https://github.com/tobin4900/solarproject.git
+   cd solarproject
    ```
 
 2. **Install Dependencies**:
@@ -92,13 +92,13 @@ A lightweight, web-based canvas editor built with React, Fabric.js, and Firebase
 - **Accessibility**: Improve keyboard navigation and screen reader support for better usability.
 
 ## Github Repo
-https://github.com/PraveenKumar22C/canvas-snap
+https://github.com/tobin4900/solarproject
 
 ## Live Demo
 
-https://canvas-editor-c2de6.web.app/
-https://canvas-editor-c2de6.firebaseapp.com/
+https://solar-ladder-editor.web.app/
+
 
 ## Video Walkthrough
 
-https://drive.google.com/file/d/1tbJ2bW6wWbACzdMnvCSQUQlYLwI1Td9w/view?usp=drive_link
+https://drive.google.com/drive/folders/1SEgV9pwxGDJs3G7CKGNZtvBTgcKwRqNq
