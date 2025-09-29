@@ -1,5 +1,5 @@
 import { useParams, useSearchParams } from "react-router-dom";
-import { CanvasEditor } from "@/components/canvas/CanvasEditor";
+import CanvasEditor from "@/components/canvas/CanvasEditor";
 import { isValidSceneId } from "@/lib/scene-utils";
 import { useEffect } from "react";
 

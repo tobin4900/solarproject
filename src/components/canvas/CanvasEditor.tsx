@@ -1,5 +1,5 @@
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import { Canvas as FabricCanvas, Circle, Rect, IText, PencilBrush } from "fabric";
 import * as fabric from "fabric";
 import { Toolbar, ToolType } from "./Toolbar";
@@ -19,7 +19,7 @@ interface CanvasEditorProps {
   isViewOnly?: boolean;
 }
 
-export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
+const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
   const canvasRef = useRef<FabricCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [activeTool, setActiveTool] = useState<ToolType>("select");
@@ -27,6 +27,7 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('theme');
     return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -50,71 +51,86 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
     setIsDark(prev => !prev);
   }, []);
 
+  const canvasConfig = useMemo(() => {
+    const isDarkTheme = document.documentElement.classList.contains('dark');
+    const canvasBg = isDarkTheme ? 'hsl(210 40% 15%)' : 'hsl(210 50% 95%)';
+    return {
+      width: 1000,
+      height: 600,
+      backgroundColor: canvasBg,
+    };
+  }, [isDark]);
+
   useEffect(() => {
     if (!canvasRef.current || isInitialized.current) return;
 
     const canvasElement = canvasRef.current;
-    const initCanvas = async () => {
+    const initCanvas = () => {
       try {
         if (canvasElement.__fabric_instance) {
           canvasElement.__fabric_instance.dispose();
           delete canvasElement.__fabric_instance;
         }
 
-        const isDark = document.documentElement.classList.contains('dark');
-        const canvasBg = isDark ? 'hsl(210 40% 15%)' : 'hsl(210 50% 95%)';
-        const canvas = new FabricCanvas(canvasElement, {
-          width: 1000,
-          height: 600,
-          backgroundColor: canvasBg,
-        });
+        const canvas = new FabricCanvas(canvasElement, canvasConfig);
 
         canvasElement.__fabric_instance = canvas;
 
-        const brush = new PencilBrush(canvas);
-        brush.color = activeColor;
-        brush.width = 3;
-        canvas.freeDrawingBrush = brush;
-
-        persistenceRef.current = new CanvasPersistence(sceneId);
-
-        const scene = await persistenceRef.current.loadScene();
-        if (scene && scene.data) {
-          try {
-            canvas.loadFromJSON(scene.data, () => {
-              canvas.renderAll();
-              toast.success("Canvas loaded!");
-              if (!isViewOnly) saveState(canvas);
-            });
-          } catch (error) {
-            console.error("Error loading canvas data:", error);
-            toast.success("Canvas ready!");
-            if (!isViewOnly) saveState(canvas);
-          }
-        } else {
-          toast.success("Canvas ready!");
-          if (!isViewOnly) saveState(canvas);
-        }
-
-        const handleSave = () => {
-          if (!isViewOnly && !isLoadingState.current && !isSavingState.current) {
-            saveState(canvas);
-            autoSave(canvas);
-          }
-        };
-
-        canvas.on('object:added', handleSave);
-        canvas.on('object:removed', handleSave);
-        canvas.on('object:modified', handleSave);
-        canvas.on('path:created', handleSave);
-        canvas.on('selection:created', () => {});
-        canvas.on('selection:updated', () => {});
-
+        // Set canvas ready immediately
         setFabricCanvas(canvas);
         isInitialized.current = true;
+        setIsLoading(false);
+        toast.success("Canvas ready!");
+
+        // Defer non-essential setup
+        setTimeout(() => {
+          const brush = new PencilBrush(canvas);
+          brush.color = activeColor;
+          brush.width = 3;
+          canvas.freeDrawingBrush = brush;
+
+          const handleSave = () => {
+            if (!isViewOnly && !isLoadingState.current && !isSavingState.current) {
+              saveState(canvas);
+              autoSave(canvas);
+            }
+          };
+
+          canvas.on('object:added', handleSave);
+          canvas.on('object:removed', handleSave);
+          canvas.on('object:modified', handleSave);
+          canvas.on('path:created', handleSave);
+          canvas.on('selection:created', () => {});
+          canvas.on('selection:updated', () => {});
+        }, 0);
+
+        // Load scene data asynchronously in background
+        setTimeout(() => {
+          getPersistence().loadScene().then((scene) => {
+            if (scene && scene.data) {
+              try {
+                canvas.loadFromJSON(scene.data, () => {
+                  canvas.renderAll();
+                  toast.success("Canvas loaded!");
+                  if (!isViewOnly) saveState(canvas);
+                });
+              } catch (error) {
+                console.error("Error loading canvas data:", error);
+                if (!isViewOnly) saveState(canvas);
+              }
+            } else {
+              if (!isViewOnly) saveState(canvas);
+            }
+          }).catch((error) => {
+            console.error("Error loading scene:", error);
+            toast.error("Failed to load canvas data. Starting with blank canvas.");
+            if (!isViewOnly) saveState(canvas);
+          });
+        }, 0);
       } catch (error) {
         console.error("Failed to initialize canvas:", error);
         toast.error("Failed to initialize canvas");
+        setIsLoading(false);
       }
     };
 
@@ -133,7 +149,7 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
         fabricCanvas.dispose();
       }
     };
-  }, [sceneId, isViewOnly]);
+  }, [sceneId, isViewOnly, canvasConfig]);
 
   const saveState = useCallback((canvas: FabricCanvas) => {
     isSavingState.current = true;
@@ -150,12 +166,19 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
     isSavingState.current = false;
   }, []);
 
-  const autoSave = useCallback((canvas: FabricCanvas) => {
-    if (persistenceRef.current && !isViewOnly) {
-      const data = JSON.stringify(canvas.toJSON());
-      persistenceRef.current.saveScene(data);
+  const getPersistence = useCallback(() => {
+    if (!persistenceRef.current) {
+      persistenceRef.current = new CanvasPersistence(sceneId);
     }
-  }, [isViewOnly]);
+    return persistenceRef.current;
+  }, [sceneId]);
+
+  const autoSave = useCallback((canvas: FabricCanvas) => {
+    if (!isViewOnly) {
+      const data = JSON.stringify(canvas.toJSON());
+      getPersistence().saveScene(data);
+    }
+  }, [isViewOnly, getPersistence]);
 
   useEffect(() => {
     if (!fabricCanvas) return;
@@ -465,10 +488,18 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
 
         <div className="flex justify-center">
           <div className={cn(
-            "bg-card border-2 border-border rounded-lg shadow-lg overflow-hidden",
+            "bg-card border-2 border-border rounded-lg shadow-lg overflow-hidden relative",
             "transition-all duration-300 hover:shadow-xl"
           )}>
             <canvas ref={canvasRef} className="block" />
+            {isLoading && (
+              <div className="absolute inset-0 bg-card/80 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                  <p className="text-sm text-muted-foreground">Loading canvas...</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -484,3 +515,5 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
     </div>
   );
 };
+
+export default memo(CanvasEditor);
