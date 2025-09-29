@@ -1,12 +1,12 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Canvas as FabricCanvas, Circle, Rect, IText, PencilBrush } from "fabric";
-import * as fabric from "fabric"; 
+import * as fabric from "fabric";
 import { Toolbar, ToolType } from "./Toolbar";
 import { ColorPicker } from "./ColorPicker";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Copy, Eye} from "lucide-react";
+import { Copy, Eye, Moon, Sun} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CanvasPersistence } from "@/lib/canvas-persistence";
 
@@ -27,11 +27,28 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  });
   const persistenceRef = useRef<CanvasPersistence | null>(null);
   const isInitialized = useRef(false);
   const isLoadingState = useRef(false);
   const isSavingState = useRef(false);
-  const lastSavedState = useRef<string | null>(null); 
+  const lastSavedState = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  }, [isDark]);
+
+  const toggleTheme = useCallback(() => {
+    setIsDark(prev => !prev);
+  }, []);
 
   useEffect(() => {
     if (!canvasRef.current || isInitialized.current) return;
@@ -44,10 +61,12 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
           delete canvasElement.__fabric_instance;
         }
 
+        const isDark = document.documentElement.classList.contains('dark');
+        const canvasBg = isDark ? 'hsl(210 40% 15%)' : 'hsl(210 50% 95%)';
         const canvas = new FabricCanvas(canvasElement, {
           width: 1000,
           height: 600,
-          backgroundColor: "#ffffff",
+          backgroundColor: canvasBg,
         });
 
         canvasElement.__fabric_instance = canvas;
@@ -169,6 +188,8 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
         width: 100,
         height: 80,
         strokeWidth: 0,
+        selectable: true,
+        evented: true,
       });
       fabricCanvas.add(rect);
       fabricCanvas.setActiveObject(rect);
@@ -181,6 +202,8 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
         fill: activeColor,
         radius: 50,
         strokeWidth: 0,
+        selectable: true,
+        evented: true,
       });
       fabricCanvas.add(circle);
       fabricCanvas.setActiveObject(circle);
@@ -193,6 +216,8 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
         fill: activeColor,
         fontSize: 24,
         fontFamily: "Arial",
+        selectable: true,
+        evented: true,
       });
       fabricCanvas.add(text);
       fabricCanvas.setActiveObject(text);
@@ -231,8 +256,10 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
       fabricCanvas.renderAll();
       toast.success(`Deleted ${activeObjects.length} object(s)`);
     } else {
+      const isDark = document.documentElement.classList.contains('dark');
+      const canvasBg = isDark ? 'hsl(210 40% 15%)' : 'hsl(210 50% 95%)';
       fabricCanvas.clear();
-      fabricCanvas.backgroundColor = "#ffffff";
+      fabricCanvas.backgroundColor = canvasBg;
       fabricCanvas.renderAll();
       toast.success("Canvas cleared!");
       if (!isLoadingState.current && !isSavingState.current) {
@@ -244,9 +271,11 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
 
   const handleClear = useCallback(() => {
     if (!fabricCanvas || isViewOnly) return;
-    
+
+    const isDark = document.documentElement.classList.contains('dark');
+    const canvasBg = isDark ? 'hsl(210 40% 15%)' : 'hsl(210 50% 95%)';
     fabricCanvas.clear();
-    fabricCanvas.backgroundColor = "#ffffff";
+    fabricCanvas.backgroundColor = canvasBg;
     fabricCanvas.renderAll();
     toast.success("Canvas cleared!");
     if (!isLoadingState.current && !isSavingState.current) {
@@ -314,8 +343,10 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
       
       toast.success("Undo successful!");
     } else {
+      const isDark = document.documentElement.classList.contains('dark');
+      const canvasBg = isDark ? 'hsl(210 40% 15%)' : 'hsl(210 50% 95%)';
       fabricCanvas.clear();
-      fabricCanvas.backgroundColor = "#ffffff";
+      fabricCanvas.backgroundColor = canvasBg;
       fabricCanvas.renderAll();
       setUndoStack([]);
       setRedoStack([]);
@@ -360,6 +391,16 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
           </div>
           
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleTheme}
+              className="gap-2"
+            >
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              {isDark ? "Light" : "Dark"}
+            </Button>
+
             {!isViewOnly && (
               <Button
                 variant="outline"
@@ -376,7 +417,7 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
                 Copy View Link
               </Button>
             )}
-            
+
             <Button
               onClick={() => window.location.href = "/"}
               variant="outline"
@@ -402,15 +443,15 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
               canRedo={redoStack.length > 0}
             />
             {showExportDropdown && (
-              <div className="absolute top-full mt-2 left-48 bg-white border rounded-lg shadow-lg z-10">
+              <div className="absolute top-full mt-2 left-48 bg-card border rounded-lg shadow-lg z-10">
                 <button
-                  className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                  className="block w-full text-left px-4 py-2 text-sm hover:bg-muted"
                   onClick={() => handleExport("png")}
                 >
                   Export as PNG
                 </button>
                 <button
-                  className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                  className="block w-full text-left px-4 py-2 text-sm hover:bg-muted"
                   onClick={() => handleExport("svg")}
                 >
                   Export as SVG
@@ -424,7 +465,7 @@ export const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps)
 
         <div className="flex justify-center">
           <div className={cn(
-            "bg-white border-2 border-border rounded-lg shadow-lg overflow-hidden",
+            "bg-card border-2 border-border rounded-lg shadow-lg overflow-hidden",
             "transition-all duration-300 hover:shadow-xl"
           )}>
             <canvas ref={canvasRef} className="block" />
