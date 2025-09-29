@@ -92,7 +92,7 @@ A lightweight, web-based canvas editor built with React, Fabric.js, and Firebase
 - **Accessibility**: Improve keyboard navigation and screen reader support for better usability.
 
 ## Github Repo
-https://github.com/PraveenKumar22C/canvas-snap
+[https://github.com/PraveenKumar22C/canvas-snap](https://solar-ladder-editor.web.app/)
 
 ## Live Demo
 
