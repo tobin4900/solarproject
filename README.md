@@ -98,6 +98,7 @@ https://github.com/tobin4900/solarproject
 
 https://solar-ladder-editor.web.app/
 
+**Note:** The live demo now includes performance optimizations for faster canvas loading and improved user experience.
 
 ## Video Walkthrough
 
