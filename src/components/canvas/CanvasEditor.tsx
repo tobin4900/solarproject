@@ -1,4 +1,4 @@
-i
+
 import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import { Canvas as FabricCanvas, Circle, Rect, IText, PencilBrush } from "fabric";
 import * as fabric from "fabric";
@@ -33,6 +33,7 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
     return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
   const persistenceRef = useRef<CanvasPersistence | null>(null);
+  const currentSceneIdRef = useRef<string | null>(null);
   const isInitialized = useRef(false);
   const isLoadingState = useRef(false);
   const isSavingState = useRef(false);
@@ -167,8 +168,12 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
   }, []);
 
   const getPersistence = useCallback(() => {
-    if (!persistenceRef.current) {
+    if (!persistenceRef.current || currentSceneIdRef.current !== sceneId) {
+      if (persistenceRef.current) {
+        persistenceRef.current.cleanup();
+      }
       persistenceRef.current = new CanvasPersistence(sceneId);
+      currentSceneIdRef.current = sceneId;
     }
     return persistenceRef.current;
   }, [sceneId]);
@@ -425,20 +430,51 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
             </Button>
 
             {!isViewOnly && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const currentUrl = window.location.href;
-                  const viewOnlyUrl = currentUrl + (currentUrl.includes("?") ? "&" : "?") + "viewOnly=true";
-                  navigator.clipboard.writeText(viewOnlyUrl);
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                if (!fabricCanvas) {
+                  toast.error("Canvas not ready.");
+                  return;
+                }
+                try {
+                  const data = JSON.stringify(fabricCanvas.toJSON());
+                  await getPersistence().saveNow(data);
+                  toast.success("Canvas saved to the cloud!");
+              
+                  const viewOnlyUrl = `${window.location.origin}/canvas/${sceneId}?viewOnly=true`;
+              
+                  if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(viewOnlyUrl);
+                  } else {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = viewOnlyUrl;
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    try {
+                      document.execCommand('copy');
+                    } catch (err) {
+                      console.error('Fallback: Oops, unable to copy', err);
+                    }
+                    document.body.removeChild(textArea);
+                  }
                   toast.success("View-only link copied!");
-                }}
-                className="gap-2"
-              >
-                <Copy className="w-4 h-4" />
-                Copy View Link
-              </Button>
+                } catch (error) {
+                  console.error("Failed to save canvas or copy link:", error);
+                  let errorMessage = "Could not save canvas or copy link. Please try again.";
+                  if (error instanceof Error) {
+                    errorMessage = `${errorMessage} Reason: ${error.message}`;
+                  }
+                  toast.error(errorMessage);
+                }
+              }}
+              className="gap-2"
+            >
+              <Copy className="w-4 h-4" />
+              Copy View Link
+            </Button>
             )}
 
             <Button

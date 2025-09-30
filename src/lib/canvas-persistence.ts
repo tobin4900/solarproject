@@ -59,48 +59,60 @@ export class CanvasPersistence {
     }
   }
 
-  async saveScene(canvasData: string, title?: string): Promise<void> {
+  saveScene(canvasData: string, title?: string): void {
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout);
     }
 
-    this.saveTimeout = setTimeout(async () => {
-      try {
-        const docRef = doc(db, 'scenes', this.sceneId);
-        const docSnap = await getDoc(docRef);
-
-        const now = new Date().toISOString();
-
-        if (docSnap.exists()) {
-          await updateDoc(docRef, {
-            data: canvasData,
-            updatedAt: now,
-            ...(title && { title })
-          });
-        } else {
-          await setDoc(docRef, {
-            id: this.sceneId,
-            data: canvasData,
-            createdAt: now,
-            updatedAt: now,
-            title: title || 'Untitled Canvas'
-          });
-        }
-
-        // Update localStorage cache
-        const cachedScene = {
-          id: this.sceneId,
-          data: canvasData,
-          createdAt: docSnap.exists() ? docSnap.data().createdAt : now,
-          updatedAt: now,
-          title: title || docSnap.exists() ? docSnap.data().title : 'Untitled Canvas'
-        };
-        localStorage.setItem(`canvas_scene_${this.sceneId}`, JSON.stringify(cachedScene));
-      } catch (error) {
-        console.error('Error saving scene:', error);
-      }
+    this.saveTimeout = setTimeout(() => {
+      this.saveNow(canvasData, title).catch(error => {
+        console.error("Auto-save failed:", error);
+      });
     }, 1000);
   }
+
+  async saveNow(canvasData: string, title?: string): Promise<void> {
+    if (this.saveTimeout) {
+        clearTimeout(this.saveTimeout);
+        this.saveTimeout = null;
+    }
+    try {
+      const docRef = doc(db, 'scenes', this.sceneId);
+      const docSnap = await getDoc(docRef);
+
+      const now = new Date().toISOString();
+
+      if (docSnap.exists()) {
+        await updateDoc(docRef, {
+          data: canvasData,
+          updatedAt: now,
+          ...(title && { title })
+        });
+      } else {
+        await setDoc(docRef, {
+          id: this.sceneId,
+          data: canvasData,
+          createdAt: now,
+          updatedAt: now,
+          title: title || 'Untitled Canvas'
+        });
+      }
+
+      // Update localStorage cache
+      const cachedScene = {
+        id: this.sceneId,
+        data: canvasData,
+        createdAt: docSnap.exists() ? docSnap.data().createdAt : now,
+        updatedAt: now,
+        title: title || (docSnap.exists() ? docSnap.data().title : 'Untitled Canvas')
+      };
+      localStorage.setItem(`canvas_scene_${this.sceneId}`, JSON.stringify(cachedScene));
+    } catch (error) {
+      console.error('Error saving scene:', error);
+      throw error; // re-throw to be handled by caller
+    }
+  }
+
 
   cleanup(): void {
     if (this.saveTimeout) {
