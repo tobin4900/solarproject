@@ -19,6 +19,8 @@ interface CanvasEditorProps {
   isViewOnly?: boolean;
 }
 
+
+
 const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
   const canvasRef = useRef<FabricCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
@@ -39,6 +41,7 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
   const isSavingState = useRef(false);
   const lastSavedState = useRef<string | null>(null);
 
+
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
@@ -52,15 +55,10 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
     setIsDark(prev => !prev);
   }, []);
 
-  const canvasConfig = useMemo(() => {
-    const isDarkTheme = document.documentElement.classList.contains('dark');
-    const canvasBg = isDarkTheme ? 'hsl(210 40% 15%)' : 'hsl(210 50% 95%)';
-    return {
-      width: 1000,
-      height: 600,
-      backgroundColor: canvasBg,
-    };
-  }, [isDark]);
+  const canvasConfig = useMemo(() => ({
+    width: 1000,
+    height: 600,
+  }), []);
 
   useEffect(() => {
     if (!canvasRef.current || isInitialized.current) return;
@@ -74,6 +72,10 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
         }
 
         const canvas = new FabricCanvas(canvasElement, canvasConfig);
+
+        const isDarkTheme = document.documentElement.classList.contains('dark');
+        canvas.backgroundColor = isDarkTheme ? 'hsl(210 40% 15%)' : 'hsl(210 50% 95%)';
+        canvas.renderAll();
 
         canvasElement.__fabric_instance = canvas;
 
@@ -111,7 +113,10 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
             if (scene && scene.data) {
               try {
                 canvas.loadFromJSON(scene.data, () => {
+                  const isDarkTheme = document.documentElement.classList.contains('dark');
+                  canvas.backgroundColor = isDarkTheme ? 'hsl(210 40% 15%)' : 'hsl(210 50% 95%)';
                   canvas.renderAll();
+                  canvas.getObjects().forEach(applyLockState);
                   toast.success("Canvas loaded!");
                   if (!isViewOnly) saveState(canvas);
                 });
@@ -150,7 +155,7 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
         fabricCanvas.dispose();
       }
     };
-  }, [sceneId, isViewOnly, canvasConfig]);
+  }, [sceneId, isViewOnly]);
 
   const saveState = useCallback((canvas: FabricCanvas) => {
     isSavingState.current = true;
@@ -188,6 +193,14 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
   useEffect(() => {
     if (!fabricCanvas) return;
 
+    const canvasBg = isDark ? 'hsl(210 40% 15%)' : 'hsl(210 50% 95%)';
+    fabricCanvas.backgroundColor = canvasBg;
+    fabricCanvas.renderAll();
+  }, [isDark, fabricCanvas]);
+
+  useEffect(() => {
+    if (!fabricCanvas) return;
+
     fabricCanvas.isDrawingMode = activeTool === "pen" && !isViewOnly;
     
     if (activeTool === "pen" && fabricCanvas.freeDrawingBrush) {
@@ -200,6 +213,103 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
       fabricCanvas.defaultCursor = "crosshair";
     }
   }, [activeTool, activeColor, fabricCanvas, isViewOnly]);
+
+  const [canLock, setCanLock] = useState(false);
+  const [canUnlock, setCanUnlock] = useState(false);
+
+  const applyLockState = useCallback((obj: fabric.Object) => {
+    if (obj.get('locked')) {
+      obj.lockMovementX = true;
+      obj.lockMovementY = true;
+      obj.lockScalingX = true;
+      obj.lockScalingY = true;
+      obj.lockRotation = true;
+      obj.selectable = true;
+      obj.evented = true;
+    } else {
+      obj.lockMovementX = false;
+      obj.lockMovementY = false;
+      obj.lockScalingX = false;
+      obj.lockScalingY = false;
+      obj.lockRotation = false;
+      obj.selectable = true;
+      obj.evented = true;
+    }
+  }, []);
+
+  const updateLockStates = useCallback(() => {
+    if (!fabricCanvas) {
+      setCanLock(false);
+      setCanUnlock(false);
+      return;
+    }
+    const activeObjects = fabricCanvas.getActiveObjects();
+    if (activeObjects.length === 0) {
+      setCanLock(false);
+      setCanUnlock(false);
+      return;
+    }
+    const anyUnlocked = activeObjects.some(obj => !obj.get('locked'));
+    const anyLocked = activeObjects.some(obj => obj.get('locked'));
+    setCanLock(anyUnlocked);
+    setCanUnlock(anyLocked);
+  }, [fabricCanvas]);
+
+  useEffect(() => {
+    if (!fabricCanvas) return;
+
+    fabricCanvas.on('selection:created', updateLockStates);
+    fabricCanvas.on('selection:updated', updateLockStates);
+    fabricCanvas.on('selection:cleared', () => {
+      setCanLock(false);
+      setCanUnlock(false);
+    });
+
+    return () => {
+      fabricCanvas.off('selection:created', updateLockStates);
+      fabricCanvas.off('selection:updated', updateLockStates);
+      fabricCanvas.off('selection:cleared', () => {
+        setCanLock(false);
+        setCanUnlock(false);
+      });
+    };
+  }, [fabricCanvas, updateLockStates]);
+
+  const handleLock = useCallback(() => {
+    if (!fabricCanvas) return;
+    const activeObjects = fabricCanvas.getActiveObjects();
+    activeObjects.forEach(obj => {
+      obj.lockMovementX = true;
+      obj.lockMovementY = true;
+      obj.lockScalingX = true;
+      obj.lockScalingY = true;
+      obj.lockRotation = true;
+      obj.selectable = true;
+      obj.evented = true;
+      obj.set('locked', true);
+    });
+    fabricCanvas.requestRenderAll();
+    updateLockStates();
+    toast.success("Objects locked!");
+  }, [fabricCanvas, updateLockStates]);
+
+  const handleUnlock = useCallback(() => {
+    if (!fabricCanvas) return;
+    const activeObjects = fabricCanvas.getActiveObjects();
+    activeObjects.forEach(obj => {
+      obj.lockMovementX = false;
+      obj.lockMovementY = false;
+      obj.lockScalingX = false;
+      obj.lockScalingY = false;
+      obj.lockRotation = false;
+      obj.selectable = true;
+      obj.evented = true;
+      obj.set('locked', false);
+    });
+    fabricCanvas.requestRenderAll();
+    updateLockStates();
+    toast.success("Objects unlocked!");
+  }, [fabricCanvas, updateLockStates]);
 
   const handleToolChange = useCallback((tool: ToolType) => {
     if (isViewOnly) return;
@@ -218,6 +328,7 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
         strokeWidth: 0,
         selectable: true,
         evented: true,
+        locked: false,
       });
       fabricCanvas.add(rect);
       fabricCanvas.setActiveObject(rect);
@@ -232,6 +343,7 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
         strokeWidth: 0,
         selectable: true,
         evented: true,
+        locked: false,
       });
       fabricCanvas.add(circle);
       fabricCanvas.setActiveObject(circle);
@@ -246,6 +358,7 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
         fontFamily: "Arial",
         selectable: true,
         evented: true,
+        locked: false,
       });
       fabricCanvas.add(text);
       fabricCanvas.setActiveObject(text);
@@ -274,9 +387,24 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
     }
   }, [fabricCanvas]);
 
+  // Apply lock state to objects after loading from JSON
+  useEffect(() => {
+    if (!fabricCanvas) return;
+
+    fabricCanvas.on('object:added', (e) => {
+      if (e.target) {
+        applyLockState(e.target);
+      }
+    });
+
+    fabricCanvas.on('after:render', () => {
+      fabricCanvas.getObjects().forEach(applyLockState);
+    });
+  }, [fabricCanvas, applyLockState]);
+
   const handleDelete = useCallback(() => {
     if (!fabricCanvas || isViewOnly) return;
-    
+
     const activeObjects = fabricCanvas.getActiveObjects();
     if (activeObjects.length > 0) {
       fabricCanvas.remove(...activeObjects);
@@ -284,7 +412,6 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
       fabricCanvas.renderAll();
       toast.success(`Deleted ${activeObjects.length} object(s)`);
     } else {
-      const isDark = document.documentElement.classList.contains('dark');
       const canvasBg = isDark ? 'hsl(210 40% 15%)' : 'hsl(210 50% 95%)';
       fabricCanvas.clear();
       fabricCanvas.backgroundColor = canvasBg;
@@ -295,12 +422,11 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
         autoSave(fabricCanvas);
       }
     }
-  }, [fabricCanvas, isViewOnly, saveState, autoSave]);
+  }, [fabricCanvas, isViewOnly, isDark, saveState, autoSave]);
 
   const handleClear = useCallback(() => {
     if (!fabricCanvas || isViewOnly) return;
 
-    const isDark = document.documentElement.classList.contains('dark');
     const canvasBg = isDark ? 'hsl(210 40% 15%)' : 'hsl(210 50% 95%)';
     fabricCanvas.clear();
     fabricCanvas.backgroundColor = canvasBg;
@@ -310,7 +436,7 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
       saveState(fabricCanvas);
       autoSave(fabricCanvas);
     }
-  }, [fabricCanvas, isViewOnly, saveState, autoSave]);
+  }, [fabricCanvas, isViewOnly, isDark, saveState, autoSave]);
 
   const handleExport = useCallback((format: 'png' | 'svg') => {
     if (!fabricCanvas) return;
@@ -355,23 +481,22 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
 
   const handleUndo = useCallback(() => {
     if (!fabricCanvas || isViewOnly || undoStack.length === 0) return;
-    
+
     const currentObjects = fabricCanvas.getObjects();
     if (currentObjects.length > 0) {
       const lastObject = currentObjects[currentObjects.length - 1];
       fabricCanvas.remove(lastObject);
       fabricCanvas.renderAll();
-      
+
       const currentState = JSON.stringify(fabricCanvas.toJSON());
       setRedoStack(prev => [...prev, currentState]);
-      
+
       const newState = JSON.stringify(fabricCanvas.toJSON());
       setUndoStack(prev => [...prev.slice(0, -1), newState]);
       lastSavedState.current = newState;
-      
+
       toast.success("Undo successful!");
     } else {
-      const isDark = document.documentElement.classList.contains('dark');
       const canvasBg = isDark ? 'hsl(210 40% 15%)' : 'hsl(210 50% 95%)';
       fabricCanvas.clear();
       fabricCanvas.backgroundColor = canvasBg;
@@ -381,7 +506,7 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
       lastSavedState.current = null;
       toast.success("Canvas cleared!");
     }
-  }, [fabricCanvas, isViewOnly, undoStack]);
+  }, [fabricCanvas, isViewOnly, isDark, undoStack]);
 
   const handleRedo = useCallback(() => {
     if (!fabricCanvas || isViewOnly || redoStack.length === 0) return;
@@ -397,6 +522,7 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
     isLoadingState.current = true;
     fabricCanvas.loadFromJSON(nextState, () => {
       fabricCanvas.renderAll();
+      fabricCanvas.getObjects().forEach(applyLockState);
       isLoadingState.current = false;
       toast.success("Redo successful!");
     });
@@ -498,29 +624,33 @@ const CanvasEditor = ({ sceneId, isViewOnly = false }: CanvasEditorProps) => {
               onShare={handleShare}
               onUndo={handleUndo}
               onRedo={handleRedo}
-              canUndo={undoStack.length > 0}
-              canRedo={redoStack.length > 0}
-            />
-            {showExportDropdown && (
-              <div className="absolute top-full mt-2 left-48 bg-card border rounded-lg shadow-lg z-10">
-                <button
-                  className="block w-full text-left px-4 py-2 text-sm hover:bg-muted"
-                  onClick={() => handleExport("png")}
-                >
-                  Export as PNG
-                </button>
-                <button
-                  className="block w-full text-left px-4 py-2 text-sm hover:bg-muted"
-                  onClick={() => handleExport("svg")}
-                >
-                  Export as SVG
-                </button>
-              </div>
-            )}
-            <div className="w-px h-8 bg-border" />
-            <ColorPicker color={activeColor} onChange={handleColorChange} />
-          </div>
-        )}
+        canUndo={undoStack.length > 0}
+        canRedo={redoStack.length > 0}
+        onLock={handleLock}
+        onUnlock={handleUnlock}
+        canLock={canLock}
+        canUnlock={canUnlock}
+      />
+      {showExportDropdown && (
+        <div className="absolute top-full mt-2 left-48 bg-card border rounded-lg shadow-lg z-10">
+          <button
+            className="block w-full text-left px-4 py-2 text-sm hover:bg-muted"
+            onClick={() => handleExport("png")}
+          >
+            Export as PNG
+          </button>
+          <button
+            className="block w-full text-left px-4 py-2 text-sm hover:bg-muted"
+            onClick={() => handleExport("svg")}
+          >
+            Export as SVG
+          </button>
+        </div>
+      )}
+      <div className="w-px h-8 bg-border" />
+      <ColorPicker color={activeColor} onChange={handleColorChange} />
+    </div>
+  )}
 
         <div className="flex justify-center">
           <div className={cn(
