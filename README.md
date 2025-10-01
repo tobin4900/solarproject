@@ -102,4 +102,4 @@ https://solar-ladder-editor.web.app/
 
 ## Video Walkthrough
 
-https://drive.google.com/drive/folders/1SEgV9pwxGDJs3G7CKGNZtvBTgcKwRqNq
+[(https://www.loom.com/share/9fd99ee77c4640f3b95c09154c64bcee?sid=def57882-9c17-416a-bd98-7b80cea5b0c7)]
