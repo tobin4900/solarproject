@@ -82,6 +82,7 @@ A lightweight, web-based canvas editor built with React, Fabric.js, and Firebase
 - **Undo/Redo**: Tracks canvas state changes in memory, allowing users to undo or redo actions. States are stored as JSON strings, with a limit of 20 to prevent excessive memory usage.
 - **Export**: Users can export the canvas as PNG or SVG via a dropdown menu, providing flexibility for different use cases.
 - **View-Only Mode**: Enabled through a query parameter, allowing users to share a read-only version of the canvas. A "Copy View Link" button generates the appropriate URL.
+- **lock/unlock objects**: lock or unlock objects to prevent accidental edits.
 
 ## Future Improvements
 
