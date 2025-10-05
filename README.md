@@ -87,7 +87,6 @@ A lightweight, web-based canvas editor built with React, Fabric.js, and Firebase
 ## Future Improvements
 
 - **Snap to Grid**: Implement visual snapping for precise shape alignment.
-- **Object Locking**: Allow users to lock objects to prevent accidental edits.
 - **Templates**: Provide pre-designed canvas templates for quick starts.
 - **Optimizations**: Further optimize Firestore writes by batching updates or using delta encoding.
 - **Accessibility**: Improve keyboard navigation and screen reader support for better usability.
